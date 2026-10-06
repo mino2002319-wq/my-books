@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>my books</title>
+<style>
+/* =========================================================
+   1. 変数（配色・フォント・寸法）
+   ========================================================= */
+:root {
+  --bg: #F4F2EC;       /* 背景 */
+  --board: #DDD8CC;    /* 棚板・枠線 */
+  --ink: #3E4650;      /* 文字 */
+  --accent: #6F8A9B;   /* 差し色 */
+  --card: #FAF9F5;     /* ダイアログ・入力欄 */
+  --line: #E6E2D8;     /* 区切り線 */
+
+  --sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic Medium", "Noto Sans JP", Meiryo, sans-serif;
+  --serif: "Hiragino Mincho ProN", "Yu Mincho Demibold", "Yu Mincho", "Noto Serif JP", serif;
+
+  --rowh: 226px;       /* 表紙ビュー：棚1段の高さ */
+  --plank: 22px;       /* 表紙ビュー：棚板の厚さ */
+
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* =========================================================
+   2. ベース
+   ========================================================= */
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+select, button.b, input, textarea { font: inherit; font-size: 14px; }
+
+/* =========================================================
+   3. ヘッダー・操作部品
+   ========================================================= */
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 16px 8px;
+}
+h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .12em; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#stat { width: 100%; font-size: 12px; opacity: .6; }
+
+/* ボタン：.b = 差し色 / .b.g = 枠線のみ */
+button.b {
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+button.b:hover { opacity: .85; }
+button.g { background: transparent; color: var(--ink); border-color: var(--board); }
+
+select {
+  padding: 8px;
+  border: 1px solid var(--board);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+/* セグメント（表示切替・読書状況の選択） */
+.seg { display: flex; border: 1px solid var(--board); border-radius: 6px; overflow: hidden; }
+.seg button {
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.seg button.on { background: var(--board); }
+
+/* 絞り込みチップ・検索 */
+#tools { width: 100%; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 4px 11px;
+  border: 1px solid var(--board);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip small { margin-left: 4px; font-size: 11px; opacity: .7; }
+#q {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--board);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* フォーカス */
+select:focus, #q:focus, .card input:focus, .card textarea:focus { outline: none; border-color: var(--accent); }
+
+/* =========================================================
+   4. 本棚
+   ========================================================= */
+#wrap { max-width: 1200px; margin: 8px auto 40px; padding: 0 16px; }
+#empty { grid-column: 1 / -1; align-self: center; width: 100%; padding: 60px 20px; text-align: center; opacity: .5; }
+
+/* 本（背表紙・表紙ボタン共通） */
+.bk {
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  transform-origin: bottom;
+  transition: transform .15s ease;
+}
+.bk.dn { transform: translateY(1px) !important; transition-duration: .05s; }
+.bk.pull { animation: pull .25s ease-out; }
+.bk.new { animation: drop .4s ease-out; }
+@media (hover: hover) {
+  .slot:hover .bk, .fslot:hover .bk { transform: translateY(-4px); }
+}
+
+/* --- 背表紙ビュー --- */
+#shelf.v-spine {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  min-height: 600px;
+  padding: 0 4px;
+  background: repeating-linear-gradient(to bottom, transparent 0 142px, var(--board) 142px 150px);
+}
+.slot { display: flex; align-items: flex-end; height: 150px; padding: 0 2px 8px; cursor: pointer; }
+.spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 9px;
+  border-radius: 2px;
+  background: var(--c);
+}
+/* 縦書き1列に固定し、長い場合は「…」で省略。高さは書名と著者で分け合う */
+.spine .t, .spine .a {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 0;
+  flex: 0 1 auto;
+}
+.spine .t { font-family: var(--serif); font-size: 12px; letter-spacing: .14em; }
+.spine .a { margin-top: auto; max-height: 48%; font-size: 9px; letter-spacing: .06em; opacity: .65; }
+
+/* --- 表紙ビュー（面陳列）：1段 = --rowh、下端 --plank が棚板 --- */
+#shelf.v-face {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  grid-auto-rows: var(--rowh);
+  min-height: calc(var(--rowh) * 3);
+  padding: 0 8px;
+  background: repeating-linear-gradient(to bottom,
+    transparent 0 calc(var(--rowh) - var(--plank)),
+    var(--board) calc(var(--rowh) - var(--plank)) calc(var(--rowh) - 3px),
+    #CFC9BC calc(var(--rowh) - 3px) var(--rowh));
+}
+.fslot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 10px var(--plank);
+  cursor: pointer;
+}
+.fc {
+  width: min(110px, 100%);
+  aspect-ratio: 2 / 3;
+  border-radius: 2px;
+  font: inherit;
+  box-shadow: 0 3px 8px rgba(62, 70, 80, .16);
+}
+/* 棚板の上の表示：★（読了）または読書状況 */
+.fslot .rt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--plank);
+  line-height: var(--plank);
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+.fslot .rt.st { color: var(--ink); opacity: .55; letter-spacing: .05em; }
+
+/* =========================================================
+   5. 表紙（棚の .fc と詳細カードの .cover で共用）
+      .im = 書影画像あり / .ph = 仮の表紙
+   ========================================================= */
+.cover { width: 120px; aspect-ratio: 2 / 3; border-radius: 2px; box-shadow: 0 6px 16px rgba(62, 70, 80, .16); }
+.cover, .fc { overflow: hidden; padding: 0; }
+.im { aspect-ratio: auto; background: none; }
+.im img { display: block; width: 100%; height: auto; }
+.ph {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
+  text-align: center;
+  background: var(--c);
+  outline: 1px solid rgba(62, 70, 80, .1);
+  outline-offset: -5px;
+}
+.ph .ct {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--serif);
+  line-height: 1.5;
+  letter-spacing: .06em;
+}
+.ph .ca { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .65; }
+.cover.ph { padding: 22px 12px 14px; }
+.cover .ct { font-size: 14px; }
+.cover .ca { font-size: 10px; }
+.fc.ph { padding: 16px 8px 10px; }
+.fc .ct { font-size: 11px; }
+.fc .ca { font-size: 9px; }
+
+/* =========================================================
+   6. ダイアログ（記録フォーム・詳細カード）
+   ========================================================= */
+.ov {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(62, 70, 80, .25);
+}
+.ov.show { display: flex; }
+.card {
+  width: min(100%, 420px);
+  max-height: 90%;
+  overflow: auto;
+  padding: 22px 24px;
+  border-top: 4px solid var(--c, var(--accent));
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(62, 70, 80, .12);
+  animation: pop .18s ease-out;
+}
+.card h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; letter-spacing: .04em; }
+.row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* --- 記録フォーム --- */
+.card label { display: block; margin: 12px 0 4px; font-size: 12px; opacity: .6; }
+.card input, .card textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--board);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+.card .seg button { flex: 1 1 auto; padding: 8px 6px; white-space: nowrap; }
+.stars span { font-size: 24px; color: var(--board); cursor: pointer; }
+.stars span.on { color: var(--accent); }
+
+/* --- 詳細カード --- */
+#det { border-top: 0; }
+#det h2 { font-family: var(--serif); }
+.cv { display: flex; justify-content: center; margin: -22px -24px 18px; padding: 28px 0 24px; background: var(--bg); }
+.card .au { margin-bottom: 14px; opacity: .65; }
+.card dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; font-size: 14px; }
+.card dt { opacity: .55; }
+.card dd { margin: 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.tags:empty { display: none; }
+.memo {
+  min-height: 40px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+/* =========================================================
+   7. トースト
+   ========================================================= */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 9;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity .2s;
+  pointer-events: none;
+}
+#toast.show { opacity: 1; }
+
+/* =========================================================
+   8. アニメーション・レスポンシブ
+   ========================================================= */
+@keyframes pull { 50% { transform: translateY(-10px); } }
+@keyframes drop { from { transform: translateY(-40px); opacity: 0; } }
+@keyframes pop  { from { transform: translateY(8px); opacity: 0; } }
+
+@media (max-width: 520px) {
+  :root { --rowh: 196px; }
+  #shelf.v-face { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ヘッダー：タイトル・操作・絞り込み・統計 -->
+<header>
+  <h1>my books</h1>
+  <div class="bar">
+    <div class="seg" id="view" role="group" aria-label="表示">
+      <button data-v="face">表紙</button>
+      <button data-v="spine">背表紙</button>
+    </div>
+    <select id="sort" aria-label="並び替え">
+      <option value="read-desc">読了日（新しい順）</option>
+      <option value="read-asc">読了日（古い順）</option>
+      <option value="add-desc">登録日（新しい順）</option>
+      <option value="pub-desc">発行年月（新しい順）</option>
+      <option value="pub-asc">発行年月（古い順）</option>
+      <option value="kana">五十音順（書名）</option>
+      <option value="author">著者（五十音順）</option>
+    </select>
+    <button class="b g" id="mute" aria-label="サウンド">🔊</button>
+    <button class="b" id="addb">＋ 本を記録</button>
+  </div>
+  <div id="tools">
+    <div class="chips" id="stF" role="group" aria-label="読書状況で絞り込み"></div>
+    <input id="q" type="search" placeholder="書名・著者・タグ・感想で検索" aria-label="検索">
+  </div>
+  <div id="stat"></div>
+</header>
+
+<!-- 本棚（中身は render() が描画） -->
+<div id="wrap"><div id="shelf"></div></div>
+
+<!-- 記録フォーム（新規・編集共用）。id は f＋項目 -->
+<div class="ov" id="ovAdd">
+  <div class="card">
+    <h2 id="fH">本を記録する</h2>
+    <label for="fT">書名 *</label><input id="fT" maxlength="60">
+    <label for="fY">書名の読み（五十音順用・任意）</label><input id="fY" placeholder="こころ">
+    <label for="fA">著者</label><input id="fA" maxlength="40">
+    <label>読書状況</label><div class="seg" id="fSt" role="group" aria-label="読書状況"></div>
+    <label for="fR">読了日</label><input id="fR" type="date">
+    <label for="fP">発行年月</label><input id="fP" type="month">
+    <label>評価</label><div class="stars" id="fS"></div>
+    <label for="fG">タグ（スペース区切り）</label><input id="fG" placeholder="ミステリ 再読したい">
+    <label for="fM">感想</label><textarea id="fM" rows="3"></textarea>
+    <div class="row">
+      <button class="b g" id="cancel">やめる</button>
+      <button class="b" id="save">棚に並べる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 詳細カード。id は d＋項目 -->
+<div class="ov" id="ovDet">
+  <div class="card" id="det">
+    <div class="cv"><div class="cover" id="dC"></div></div>
+    <h2 id="dT"></h2>
+    <div class="au" id="dA"></div>
+    <dl>
+      <dt>状況</dt><dd id="dSt"></dd>
+      <dt>読了日</dt><dd id="dR"></dd>
+      <dt>発行</dt><dd id="dP"></dd>
+      <dt>評価</dt><dd id="dS"></dd>
+    </dl>
+    <div class="tags" id="dG"></div>
+    <div class="memo" id="dM"></div>
+    <div class="row">
+      <button class="b g" id="del">削除</button>
+      <button class="b g" id="shr">共有</button>
+      <button class="b g" id="edt">編集</button>
+      <button class="b" id="cls">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   1. 定数・データ
+   ========================================================= */
+const KEY = 'bookshelf_v1';          // 本のデータ
+const VIEW_KEY = 'bookshelf_view';   // 表示モード（face / spine）
+
+// 読書状況（ブクログと同じ4分類）
+const ST = { want: '読みたい', reading: 'いま読んでる', done: '読み終わった', stack: '積読' };
+
+// 仮の表紙・背表紙の色（書名のハッシュで選ぶ）
+const PALETTE = ['#C9D3D9', '#B8C6CF', '#D6D0C4', '#C4CCC2', '#E2DCD0', '#AFC0CA', '#CFC8BA', '#BFC9C3', '#D9D5CB', '#A9BAC4'];
+
+const SAMPLE = [
+  { id: 1, title: 'こころ', yomi: 'こころ', author: '夏目漱石', status: 'done', read: '2026-03-12', pub: '1914-04', rate: 5, tags: ['近代文学'], memo: '（サンプル）先生の遺書の重さ。' },
+  { id: 2, title: '雪国', yomi: 'ゆきぐに', author: '川端康成', status: 'done', read: '2026-05-02', pub: '1948-12', rate: 4, tags: ['近代文学'], memo: '（サンプル）冒頭の一文。' },
+  { id: 3, title: '金閣寺', yomi: 'きんかくじ', author: '三島由紀夫', status: 'reading', read: '', pub: '1956-10', rate: 0, tags: ['近代文学'], memo: '（サンプル）' },
+];
+
+// アプリの状態
+let books = loadBooks();
+let view = 'face';       // 表示モード
+let filt = 'all';        // 読書状況の絞り込み
+let q = '';              // 検索語（小文字）
+let muted = false;
+let cur = null;          // 詳細カードで開いている本
+let delArm = false;      // 削除ボタンを1回押した状態
+let editId = null;       // 編集中の本の id（新規なら null）
+let rate = 0;            // フォームの評価
+let fst = 'done';        // フォームの読書状況
+
+try { view = localStorage.getItem(VIEW_KEY) || 'face'; } catch (e) {}
+
+function loadBooks() {
+  let data = null;
+  try { data = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  if (!Array.isArray(data)) data = SAMPLE;
+  // 旧データ（状況・タグなし）は「読み終わった」として扱う
+  data.forEach(b => {
+    if (!ST[b.status]) b.status = 'done';
+    if (!Array.isArray(b.tags)) b.tags = [];
+  });
+  return data;
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(books)); } catch (e) {}
+}
+
+/* =========================================================
+   2. ユーティリティ
+   ========================================================= */
+const $ = s => document.querySelector(s);
+
+// 要素を作る小さなヘルパー
+function el(tag, className, text) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+const hash = s => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const colorOf = b => PALETTE[hash(b.title) % PALETTE.length];
+const today = () => new Date().toISOString().slice(0, 10);
+const parseTags = s => [...new Set(s.split(/[\s,、，#＃]+/).filter(Boolean))];
+const stars = n => n ? '★'.repeat(n) + '☆'.repeat(5 - n) : '—';
+const fmt = (s, monthOnly) => {
+  if (!s) return '—';
+  const [y, m, d] = s.split('-');
+  return monthOnly ? `${y}年${+m}月` : `${y}年${+m}月${+d}日`;
+};
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* =========================================================
+   3. サウンド（Web Audio でノイズを加工して紙の音を作る）
+   ========================================================= */
+let ac, noise;
+function audio() {
+  if (!ac) {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function rustle(gain, dur, f0, f1) {
+  const a = audio(), t = a.currentTime;
+  const src = a.createBufferSource(), bp = a.createBiquadFilter(), hp = a.createBiquadFilter(), g = a.createGain();
+  src.buffer = noise;
+  bp.type = 'bandpass'; bp.Q.value = .6;
+  bp.frequency.setValueAtTime(f0, t);
+  bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  hp.type = 'highpass'; hp.frequency.value = 1800;
+  g.gain.setValueAtTime(.0001, t);
+  g.gain.linearRampToValueAtTime(gain, t + dur * .3);
+  g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  src.connect(bp).connect(hp).connect(g).connect(a.destination);
+  src.start(t, Math.random() * .4, dur + .05);
+}
+function thud(v = 1) { if (muted) return; try { rustle(.16 * v, .16, 3500, 6500); } catch (e) {} }
+function paper() { if (muted) return; try { rustle(.3, .42, 2800, 7500); setTimeout(() => rustle(.12, .25, 5000, 8500), 90); } catch (e) {} }
+function tick() { if (muted) return; try { rustle(.09, .1, 5000, 7000); } catch (e) {} }
+
+/* =========================================================
+   4. 並び替え・絞り込み
+   ========================================================= */
+const cmpStr = (x, y) => (x || '').localeCompare(y || '', 'ja');
+// 日付の比較。空欄は常に末尾
+const cmpDate = (key, dir) => (a, b) => {
+  if (!a[key] && !b[key]) return 0;
+  if (!a[key]) return 1;
+  if (!b[key]) return -1;
+  return dir * (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0);
+};
+const sorters = {
+  'read-desc': cmpDate('read', -1),
+  'read-asc': cmpDate('read', 1),
+  'add-desc': (a, b) => b.id - a.id,
+  'pub-desc': cmpDate('pub', -1),
+  'pub-asc': cmpDate('pub', 1),
+  kana: (a, b) => cmpStr(a.yomi || a.title, b.yomi || b.title),
+  author: (a, b) => cmpStr(a.author, b.author),
+};
+
+// 状況で絞り込み＋検索語（スペース区切りはAND、先頭の#は無視）
+function match(b) {
+  if (filt !== 'all' && b.status !== filt) return false;
+  if (!q) return true;
+  const hay = [b.title, b.yomi, b.author, b.memo, ...b.tags].join(' ').toLowerCase();
+  return q.split(/\s+/).every(w => hay.includes(w.replace(/^[#＃]/, '')));
+}
+
+/* =========================================================
+   5. 本棚の描画
+   ========================================================= */
+function render(newId) {
+  const shelf = $('#shelf');
+  const list = books.filter(match).sort(sorters[$('#sort').value]);
+
+  shelf.className = 'v-' + view;
+  shelf.innerHTML = '';
+  if (!books.length) shelf.innerHTML = '<div id="empty">まだ本がありません。「＋ 本を記録」から最初の一冊を並べましょう。</div>';
+  else if (!list.length) shelf.innerHTML = '<div id="empty">条件に合う本がありません。</div>';
+  list.forEach(b => shelf.append(buildSlot(b, b.id === newId)));
+
+  paintChips();
+  paintStat(list.length);
+}
+
+// 本1冊分の要素（表示モードで形が変わる）
+function buildSlot(b, isNew) {
+  const color = colorOf(b);
+  const slot = el('div');
+  const book = el('button', 'bk' + (isNew ? ' new' : ''));
+  book.style.setProperty('--c', color);
+  book.setAttribute('aria-label', b.title);
+
+  if (view === 'face') {
+    slot.className = 'fslot';
+    book.classList.add('fc');
+    fillCover(book, b);
+    slot.append(book, plankLabel(b));
+  } else {
+    const h = hash(b.title);
+    slot.className = 'slot';
+    book.classList.add('spine');
+    book.style.width = `${26 + h % 10}px`;
+    book.style.height = `${92 + (h >> 3) % 44}px`;
+    book.append(el('span', 't', b.title), el('span', 'a', b.author || ''));
+    slot.append(book);
+  }
+
+  // 押す → 沈む／離す → 戻る／クリック → 引き出して詳細を開く
+  slot.onpointerdown = () => { book.classList.add('dn'); thud(.5); };
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(k => slot.addEventListener(k, () => book.classList.remove('dn')));
+  slot.onclick = () => {
+    book.classList.add('pull');
+    paper();
+    setTimeout(() => { book.classList.remove('pull'); openDet(b, color); }, 230);
+  };
+  return slot;
+}
+
+// 棚板の上の表示：読了なら評価の★、それ以外は読書状況
+function plankLabel(b) {
+  const r = b.status === 'done'
+    ? el('div', 'rt', '★'.repeat(b.rate || 0))
+    : el('div', 'rt st', ST[b.status]);
+  r.setAttribute('aria-hidden', 'true');
+  return r;
+}
+
+function paintChips() {
+  const box = $('#stF');
+  box.innerHTML = '';
+  const items = [['all', 'すべて', books.length], ...Object.entries(ST).map(([k, v]) => [k, v, books.filter(b => b.status === k).length])];
+  items.forEach(([k, label, n]) => {
+    const c = el('button', 'chip' + (filt === k ? ' on' : ''), label);
+    c.append(el('small', '', n));
+    c.onclick = () => { filt = k; tick(); render(); };
+    box.append(c);
+  });
+}
+
+function paintStat(shown) {
+  const y = new Date().getFullYear() + '';
+  const doneThisYear = books.filter(b => b.status === 'done' && (b.read || '').startsWith(y)).length;
+  $('#stat').textContent = `全 ${books.length} 冊 ／ 今年読了 ${doneThisYear} 冊` + (shown !== books.length ? ` ／ 表示中 ${shown} 冊` : '');
+}
+
+/* =========================================================
+   6. 表紙
+   ========================================================= */
+// 書影URL。将来はISBN等からAPI（openBD / Google Books など）で取得した値をここで返す
+const coverUrl = b => b.cover || '';
+
+// 表紙を描く（書影があれば画像、なければ／読み込み失敗時は仮の表紙）。棚と詳細カードで共用
+function fillCover(target, b) {
+  const placeholder = () => {
+    target.classList.remove('im');
+    target.classList.add('ph');
+    target.innerHTML = '';
+    target.append(el('div', 'ct', b.title), el('div', 'ca', b.author || ''));
+  };
+  const url = coverUrl(b);
+  if (!url) return placeholder();
+
+  target.classList.remove('ph');
+  target.classList.add('im');
+  target.innerHTML = '';
+  const img = new Image();
+  img.alt = `『${b.title}』の表紙`;
+  img.onerror = placeholder;
+  img.src = url;
+  target.append(img);
+}
+
+/* =========================================================
+   7. 詳細カード
+   ========================================================= */
+function openDet(b, color) {
+  cur = b;
+  delArm = false;
+  $('#del').textContent = '削除';
+
+  const c = $('#dC');
+  c.className = 'cover';
+  fillCover(c, b);
+
+  $('#det').style.setProperty('--c', color);
+  $('#dT').textContent = b.title;
+  $('#dA').textContent = b.author || '著者不明';
+  $('#dSt').textContent = ST[b.status];
+  $('#dR').textContent = fmt(b.read);
+  $('#dP').textContent = fmt(b.pub, true);
+  $('#dS').textContent = stars(b.rate);
+  $('#dM').textContent = b.memo || '（感想なし）';
+
+  // タグを押すとそのタグで検索
+  const g = $('#dG');
+  g.innerHTML = '';
+  b.tags.forEach(t => {
+    const chip = el('button', 'chip', '#' + t);
+    chip.onclick = () => {
+      $('#q').value = '#' + t;
+      q = ('#' + t).toLowerCase();
+      filt = 'all';
+      closeOv('#ovDet');
+      paper();
+      render();
+    };
+    g.append(chip);
+  });
+
+  $('#ovDet').classList.add('show');
+}
+const closeOv = id => $(id).classList.remove('show');
+
+function deleteCurrent(e) {
+  if (!delArm) { delArm = true; e.target.textContent = 'もう一度押して削除'; return; }
+  books = books.filter(b => b.id !== cur.id);
+  save();
+  closeOv('#ovDet');
+  render();
+  toast('削除しました');
+}
+
+async function shareCurrent() {
+  const b = cur;
+  const txt = `『${b.title}』${b.author ? ' ' + b.author : ''} ${stars(b.rate)}${b.memo ? '\n' + b.memo : ''}\n#読書記録`;
+  try {
+    if (navigator.share) await navigator.share({ text: txt });
+    else { await navigator.clipboard.writeText(txt); toast('共有用テキストをコピーしました'); }
+  } catch (e) {
+    toast('共有をキャンセルしました');
+  }
+}
+
+/* =========================================================
+   8. 記録フォーム（新規・編集共用）
+   ========================================================= */
+// 評価の★（同じ★をもう一度押すと 0 に戻る）
+const fS = $('#fS');
+for (let i = 1; i <= 5; i++) {
+  const s = el('span', '', '★');
+  s.onclick = () => { rate = rate === i ? 0 : i; tick(); paintStars(); };
+  fS.append(s);
+}
+const paintStars = () => [...fS.children].forEach((s, i) => s.classList.toggle('on', i < rate));
+
+// 読書状況（「読み終わった」にしたとき読了日が空なら今日を入れる）
+const fSt = $('#fSt');
+Object.entries(ST).forEach(([k, label]) => {
+  const s = el('button', '', label);
+  s.dataset.v = k;
+  s.onclick = () => {
+    fst = k;
+    tick();
+    paintStatus();
+    if (k === 'done' && !$('#fR').value) $('#fR').value = today();
+  };
+  fSt.append(s);
+});
+const paintStatus = () => [...fSt.children].forEach(s => s.classList.toggle('on', s.dataset.v === fst));
+
+// b なし＝新規、b あり＝編集
+function openForm(b) {
+  editId = b ? b.id : null;
+  $('#fH').textContent = b ? '記録を編集' : '本を記録する';
+  $('#save').textContent = b ? '保存する' : '棚に並べる';
+
+  $('#fT').value = b ? b.title : '';
+  $('#fY').value = b ? b.yomi || '' : '';
+  $('#fA').value = b ? b.author || '' : '';
+  $('#fR').value = b ? b.read || '' : today();
+  $('#fP').value = b ? b.pub || '' : '';
+  $('#fG').value = b ? b.tags.join(' ') : '';
+  $('#fM').value = b ? b.memo || '' : '';
+  rate = b ? b.rate || 0 : 0;
+  fst = b ? b.status : 'done';
+  paintStars();
+  paintStatus();
+
+  $('#ovAdd').classList.add('show');
+  $('#fT').focus();
+}
+
+function submitForm() {
+  const title = $('#fT').value.trim();
+  if (!title) { toast('書名を入力してください'); return; }
+
+  const data = {
+    title,
+    yomi: $('#fY').value.trim(),
+    author: $('#fA').value.trim(),
+    status: fst,
+    read: $('#fR').value,
+    pub: $('#fP').value,
+    rate,
+    tags: parseTags($('#fG').value),
+    memo: $('#fM').value.trim(),
+  };
+  closeOv('#ovAdd');
+
+  // 編集：上書きして詳細カードに戻る
+  if (editId) {
+    const b = books.find(x => x.id === editId);
+    Object.assign(b, data);
+    save();
+    render();
+    openDet(b, colorOf(b));
+    toast('保存しました');
+    return;
+  }
+
+  // 新規：追加した本が絞り込みで隠れないよう解除してから描画
+  const b = { id: Date.now(), ...data };
+  books.push(b);
+  save();
+  if (!match(b)) { filt = 'all'; q = ''; $('#q').value = ''; }
+  render(b.id);
+  setTimeout(() => thud(1.2), 250);
+}
+
+/* =========================================================
+   9. イベント登録・起動
+   ========================================================= */
+// ヘッダー
+const viewButtons = document.querySelectorAll('#view button');
+const paintView = () => viewButtons.forEach(x => x.classList.toggle('on', x.dataset.v === view));
+viewButtons.forEach(x => x.onclick = () => {
+  if (view === x.dataset.v) return;
+  view = x.dataset.v;
+  try { localStorage.setItem(VIEW_KEY, view); } catch (e) {}
+  paintView();
+  paper();
+  render();
+});
+$('#sort').onchange = () => { paper(); render(); };
+$('#q').oninput = e => { q = e.target.value.trim().toLowerCase(); render(); };
+$('#mute').onclick = e => { muted = !muted; e.target.textContent = muted ? '🔇' : '🔊'; tick(); };
+$('#addb').onclick = () => { tick(); openForm(); };
+
+// 記録フォーム
+$('#cancel').onclick = () => closeOv('#ovAdd');
+$('#save').onclick = submitForm;
+
+// 詳細カード
+$('#cls').onclick = () => { closeOv('#ovDet'); thud(.8); };
+$('#edt').onclick = () => { closeOv('#ovDet'); tick(); openForm(cur); };
+$('#del').onclick = deleteCurrent;
+$('#shr').onclick = shareCurrent;
+
+// ダイアログは背景クリック・Esc で閉じる
+document.querySelectorAll('.ov').forEach(o => o.addEventListener('pointerdown', e => { if (e.target === o) o.classList.remove('show'); }));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.ov.show').forEach(o => o.classList.remove('show'));
+});
+
+paintView();
+render();
+</script>
+</body>
+</html>

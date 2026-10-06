@@ -1,0 +1,4 @@
+# 公開するのは index.html だけ。それ以外は Git に記録しない（新しいファイルも自動的に除外される）
+*
+!index.html
+!.gitignore
