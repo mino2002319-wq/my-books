@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>my books</title>
+<!-- PWA：ホーム画面に追加したときの名前・アイコン・見た目 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#F4F2EC">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="my books">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 /* =========================================================
    1. 変数（配色・フォント・寸法）
@@ -855,6 +863,11 @@ document.addEventListener('keydown', e => {
 
 paintView();
 render();
+
+// PWA：サービスワーカーを登録（https で公開しているときだけ。ファイルを直接開いたときは何もしない）
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>

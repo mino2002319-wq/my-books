@@ -1,4 +1,9 @@
-# 公開するのは index.html だけ。それ以外は Git に記録しない（新しいファイルも自動的に除外される）
+# 公開するのは下の ! で始まるファイルだけ。それ以外は Git に記録しない（新しいファイルも自動的に除外される）
 *
-!index.html
 !.gitignore
+!index.html
+# PWA
+!manifest.webmanifest
+!sw.js
+!icons/
+!icons/*.png
